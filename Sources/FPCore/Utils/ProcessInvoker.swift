@@ -1,74 +1,98 @@
 import Foundation
 
-public class ProcessInvoker {
+public struct ProcessResult {
     public let output: String
     public let error: String
     public let exitCode: Int32
+    public let terminationReason: Process.TerminationReason
 
-    static public func run(_ path: String, arguments: [String]) -> ProcessInvoker {
-        let result = ProcessInvoker.invoke(path, arguments: arguments)
-        let process = ProcessInvoker(output: result.output, error: result.error, exitCode: result.exitCode)
-        return process
-    }
-
-    private init(output: String, error: String, exitCode: Int32) {
+    fileprivate init(_ output: String, _ error: String, _ exitCode: Int32, _ terminationReason: Process.TerminationReason) {
         self.output = output
         self.error = error
         self.exitCode = exitCode
+        self.terminationReason = terminationReason
+    }
+}
+
+public class ProcessInvoker {
+    private let process = Process()
+    private let outputDataAvailable: ((_ data: Data) -> Void)?
+
+    private var outputData = Data()
+    private var errorData = Data()
+    public private(set) var runError: Error? = nil
+
+    private init(_ block: ((_ data: Data) -> Void)?) {
+        self.outputDataAvailable = block
     }
 
-    static private func invoke(_ path: String, arguments: [String]) ->
-                (output: String, error: String, exitCode: Int32, exitReason: Process.TerminationReason) {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: path)
-        task.arguments = arguments
+    // Runs the command, waits for it to exit and returns the results
+    static public func run(_ path: String, arguments: [String]) -> ProcessResult {
+        return start(path, arguments: arguments, nil).waitForExit()
+    }
 
-        var outputData = Data()
+    // Runs the command, returning without waiting for the command to exit
+    // Check `runError` to ensure this `start` method succeeded
+    // Call `waitForExit` to wait for the process to exit
+    static public func start(_ path: String, arguments: [String], _ block: ((_ data: Data) -> Void)?) -> ProcessInvoker {
+        let pi = ProcessInvoker(block)
+        pi.start(path, arguments)
+        return pi
+    }
+
+    private func start(_ path: String, _ arguments: [String]) {
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = arguments
+
         let outputPipe = Pipe()
-        var errorData = Data()
-        let errorPipe = Pipe()
-
         let stdoutHandler: (FileHandle) -> Void = { handler in
             let data = handler.availableData
             if data.isEmpty {
                 return
             }
-            outputData.append(data)
+
+            if let outputCallback = self.outputDataAvailable {
+                outputCallback(data)
+            } else {
+                self.outputData.append(data)
+            }
         }
 
+        let errorPipe = Pipe()
         let stderrHandler: (FileHandle) -> Void = { handler in
             let data = handler.availableData
             if data.count == 0 {
                 return
             }
-            errorData.append(handler.availableData)
+            self.errorData.append(handler.availableData)
         }
 
-        task.standardOutput = outputPipe
+        process.standardInput = Pipe()
+        process.standardOutput = outputPipe
         outputPipe.fileHandleForReading.readabilityHandler = stdoutHandler
-
-        task.standardError = errorPipe
+        process.standardError = errorPipe
         errorPipe.fileHandleForReading.readabilityHandler = stderrHandler
 
-        // This executable may depend on another executable in the same folder - 
-        // make sure the path includes the executable folder
-        // task.environment = ["PATH": path.deletingLastPathComponent]
-
-// let startTime = Date()
-        var runError: Error? = nil
         do {
-            try task.run()
-            task.waitUntilExit()
+            try process.run()
         } catch {
             runError = error
         }
-// print("PI: \(path) \(arguments.joined(separator: " ")) -> \(Int(Date().timeIntervalSince(startTime)))")
+    }
 
+    public func writeToStdin(_ input: String) {
+        let filehandle = (process.standardInput as! Pipe).fileHandleForWriting
+        filehandle.write(input.data(using: .utf8)!)
+        try? filehandle.synchronize()
+    }
+
+    public func waitForExit() -> ProcessResult {
+        process.waitUntilExit()
         let output = String(data: outputData, encoding: String.Encoding.utf8) ?? ""
         let error = String(data: errorData, encoding: String.Encoding.utf8) ?? ""
         if let err = runError {
-            return (output + "\n" + error, "\(err)", -1, Process.TerminationReason.uncaughtSignal)
+            return ProcessResult(output + "\n" + error, "\(err)", -1, Process.TerminationReason.uncaughtSignal)
         }
-        return (output, error, task.terminationStatus, task.terminationReason)
+        return ProcessResult(output, error, process.terminationStatus, process.terminationReason)
     }
 }

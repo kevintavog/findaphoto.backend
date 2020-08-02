@@ -4,7 +4,7 @@ import NIOConcurrencyHelpers
 import FPCore
 
 public class Statistics {
-    static let EmitIndexedCount = 500
+    static let EmitIndexedCount = 1000
     static var startTime = Date()
     static var folders = 0
     static var files = 0

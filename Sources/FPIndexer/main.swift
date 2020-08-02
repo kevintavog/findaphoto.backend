@@ -44,8 +44,14 @@ let reverseNameFlag = Flag(
     description: "The URL for ReverseNameLookup.",
     required: true)
 
+let timingsFlag = Flag(
+    longName: "timings",
+    value: false,
+    description: "Show timings")
 
-let flags = [concurrentFlag, elasticSearchFlag, indexOverrideFlag, pathFlag, reindexFlag, reverseNameFlag]
+
+
+let flags = [concurrentFlag, elasticSearchFlag, indexOverrideFlag, pathFlag, reindexFlag, reverseNameFlag, timingsFlag]
 let eventGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 let eventLoop = eventGroup.next()
 
@@ -57,6 +63,7 @@ let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
     let pathURL = URL(fileURLWithPath: path)
     let concurrent = flags.getInt(name: "concurrent") ?? 2
     let reindex = flags.getBool(name: "reindex") ?? false
+    let showTimings = flags.getBool(name: "timings") ?? false
     if let indexPrefix = flags.getString(name: "index") {        
         ElasticSearchClient.setIndexPrefix(indexPrefix)
     }
@@ -64,9 +71,16 @@ let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
     var outstandingRequests = 0
     let rwLock = RWLock()
 
+    var totalSignatureDuration = 0.0
+    var totalCheckDuration = 0.0
+    var totalPrepareDuration = 0.0
+    var totalLookupkDuration = 0.0
+
+
     do {
         StandardPaths.initFor(appName: "FPIndexer")
 
+        PrepareMedia.configure(instances: concurrent)
         try ElasticSearchInit.run(eventLoop)
         try Aliases.initialize(eventLoop)
         let alias = try Aliases.addOrCreateFrom(path: path)
@@ -90,15 +104,14 @@ let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
             semaphore.wait()
 
             Async.background {
-let startTime = Date()
-var prepareMediaTime = startTime
-var lookupNamesTime = startTime
-var generateTime = startTime
+                let startTime = Date()
+                var prepareMediaTime = startTime
+                var lookupNamesTime = startTime
 
                 Signature.calculate(files)
-let signatureTime = Date()
+                let signatureTime = Date()
                 CheckMediaExists.run(files)
-let checkMediaTime = Date()
+                let checkMediaTime = Date()
 
 
                 let newOrChanged = files.filter { $0.signatureMatches == false }
@@ -106,33 +119,40 @@ let checkMediaTime = Date()
 
                 if toIndex.count > 0 {
                     var media = PrepareMedia.run(folder, toIndex)
-prepareMediaTime = Date()
+                    prepareMediaTime = Date()
+
                     if media.count > 0 {
                         media = LookupNames.run(media)
-lookupNamesTime = Date()
-// TODO: Indexing & thumbnail generation should be in parallel
+                        lookupNamesTime = Date()
+
                         IndexMedia.run(media)
                         GenerateThumbnails.run(folder, media)
-generateTime = Date()
                     }
 
                     let relativePath = "\(pathURL.lastPathComponent)/\(folder.path.dropFirst(path.count))"
                     Statistics.completedFolder(relativePath)
                 }
 
-let endTime = Date()
-let allDuration = Int(endTime.timeIntervalSince(startTime))
-let signatureDuration = Int(signatureTime.timeIntervalSince(startTime))
-let checkDuration = Int(checkMediaTime.timeIntervalSince(signatureTime))
-let prepareDuration = Int(prepareMediaTime.timeIntervalSince(checkMediaTime))
-let lookupkDuration = Int(lookupNamesTime.timeIntervalSince(prepareMediaTime))
-let generateDuration = Int(generateTime.timeIntervalSince(lookupNamesTime))
+                let endTime = Date()
+                let allDuration = Int(endTime.timeIntervalSince(startTime))
+                let signatureDuration = signatureTime.timeIntervalSince(startTime)
+                let checkDuration = checkMediaTime.timeIntervalSince(signatureTime)
+                let prepareDuration = prepareMediaTime.timeIntervalSince(checkMediaTime)
+                let lookupkDuration = lookupNamesTime.timeIntervalSince(prepareMediaTime)
 
-if allDuration > 0 {
-print(" >> item count: \(files.count); all: \(allDuration), sign: \(signatureDuration), check: \(checkDuration), prep: \(prepareDuration), "
-    + "look: \(lookupkDuration), generate: \(generateDuration)")
-}
-                rwLock.write( { outstandingRequests -= 1 })
+                if showTimings && allDuration > 0 {
+                    print(" >> item count: \(files.count); all: \(allDuration), sign: \(Int(signatureDuration)), "
+                        + "check: \(Int(checkDuration)), prep: \(Int(prepareDuration)), "
+                        + "look: \(Int(lookupkDuration))")
+                }
+
+                rwLock.write( { 
+                    outstandingRequests -= 1
+                    totalSignatureDuration += signatureDuration
+                    totalCheckDuration += checkDuration
+                    totalPrepareDuration += prepareDuration
+                    totalLookupkDuration += lookupkDuration
+                })
                 semaphore.signal()
             }
         })
@@ -146,8 +166,12 @@ print(" >> item count: \(files.count); all: \(allDuration), sign: \(signatureDur
         } while waitCount > 0
 
         IndexMedia.finish()
+        PrepareMedia.cleanup()
 
 
+        print("signatures: \(Int(totalSignatureDuration)), "
+            + "check existing: \(Int(totalCheckDuration)), prepare: \(Int(totalPrepareDuration)), "
+            + "name lookup: \(Int(totalLookupkDuration))")
         Statistics.stop()
         emitFailures()
     } catch {

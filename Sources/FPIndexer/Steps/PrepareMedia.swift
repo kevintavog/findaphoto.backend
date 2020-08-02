@@ -51,12 +51,54 @@ class PrepareMedia {
     ]
 
 
+    static private let runnersRwLock = RWLock()
+    static private var availableRunners = [ExifToolRunner()]
+    static private var semaphore = DispatchSemaphore(value: 1)
+
+    static public func configure(instances: Int) {
+        semaphore = DispatchSemaphore(value: 1)
+        availableRunners = []
+        for _ in 0..<instances {
+            availableRunners.append(ExifToolRunner())
+        }
+    }
+
+    static public func cleanup() {
+        for r in availableRunners {
+            r.close()
+        }
+    }
+
+    static private func invokeExifRunner(_ folder: URL) -> [String:JSON] {
+        // Wait for a runner to be available
+        semaphore.wait()
+
+        var runner: ExifToolRunner? = nil
+        runnersRwLock.write( {
+            if availableRunners.count > 0 {
+                runner = availableRunners.removeFirst()
+            }
+        } )
+
+        defer { semaphore.signal() }
+        if let r = runner {
+            let nameToExif = r.at(folder.path)
+
+            runnersRwLock.write( {
+                availableRunners.append(r)
+            } )
+
+            return nameToExif
+        } else {
+            IndexingFailures.append("Unable to get runner!")
+            return [:]
+        }
+    }
 
     static func run(_ folder: URL, _ files: [FpFile]) -> [FpMedia] {
-        let nameToExif = ExifToolRunner.at(folder.path)
+        let nameToExif = invokeExifRunner(folder)
         Statistics.add(exifInvocations: 1)
 
-// let startTime = Date()
         var allMedia = [FpMedia]()
         for fp in files {
             if let exif = nameToExif[fp.url.lastPathComponent] {
@@ -88,8 +130,6 @@ class PrepareMedia {
                 IndexingFailures.append("Unable to find exif for \(fp.url.path)")
             }
         }
-
-// print("PM: \(folder.path), \(files.count) files -> \(Int(Date().timeIntervalSince(startTime))) seconds")
 
         return allMedia
     }
@@ -130,13 +170,14 @@ class PrepareMedia {
 
         // Check dateTime against file modify date, warn if an issue
         if let fileModifyDate = exif["File"]["FileModifyDate"].string {
-            let modifyDate = utcFormatter.date(from: fileModifyDate)
-            // Allow a small amount of difference to account for some filesystems (FAT) 
-            // that have poor timestamp granularity
-            let diff = abs(modifyDate!.timeIntervalSince(dateTime!))
-            if diff > 2.0 {
-                warnings.append("File modify date does not match media date: created ="
-                    + " \(dateTime!), modified = \(modifyDate!)")
+            if let modifyDate = utcFormatter.date(from: fileModifyDate) {
+                // Allow a small amount of difference to account for some filesystems (FAT) 
+                // that have poor timestamp granularity
+                let diff = abs(modifyDate.timeIntervalSince(dateTime!))
+                if diff > 2.0 {
+                    warnings.append("File modify date does not match media date: created ="
+                        + " \(dateTime!), modified = \(modifyDate)")
+                }
             }
         }
 
