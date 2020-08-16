@@ -2,7 +2,9 @@ import Foundation
 
 public class StandardPaths {
     static public private(set) var homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
+    static public private(set) var executableDirectory = Bundle.main.bundlePath
 
+    // var MediaClassifierPath string
     // var LogDirectory string
     static public private(set) var configDirectory = ""
     static public private(set) var configFilename = "rangic.findaphotoService"
@@ -10,10 +12,8 @@ public class StandardPaths {
     static public private(set) var exifToolPath = ""
     static public private(set) var vipsThumbnailPath = ""
     static public private(set) var ffmpegPath = ""
+    static public private(set) var indexerPath = [executableDirectory, "FPIndexer"].joined(separator: "/")
 
-    // var ExecutingDirectory string
-    // var IndexerPath string
-    // var MediaClassifierPath string
 
     static public func initFor(appName: String) {
 #if !os(Linux)

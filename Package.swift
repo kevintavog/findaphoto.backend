@@ -32,7 +32,9 @@ let package = Package(
     targets: [
         .target(
             name: "FindAPhoto",
-            dependencies: ["Async", "Guaka", "FPCore", "SwiftyJSON", .product(name: "Vapor", package: "vapor")],
+            dependencies: ["Async", "Guaka", "FPCore", "SwiftyJSON", 
+                .product(name: "Vapor", package: "vapor"),
+                .product(name: "LoggingFormatAndPipe", package: "swift-log-format-and-pipe")],
             swiftSettings: [
                 // Enable better optimizations when building in Release configuration. Despite the use of
                 // the `.unsafeFlags` construct required by SwiftPM, this flag is recommended for Release

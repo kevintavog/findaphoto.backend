@@ -21,6 +21,11 @@ public class Aliases {
         try load()
     }
 
+    static public func reload() throws {
+        print("Reloading aliases")
+        try load()
+    }
+
     static public func addOrCreateFrom(path: String) throws -> String {
         let normalized = PathUtils.normalize(path)
         if let alias = from(path: normalized) {

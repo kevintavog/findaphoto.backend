@@ -60,6 +60,7 @@ final class FilesController: RouteCollection {
                     // Hack to delete the temp file without causing the response to be truncated.
                     Async.background {
                         do {
+                            sleep(1)
                             try FileManagement.deleteFileIfPresent(slideFile)
                         } catch {
                             FilesController.logger.warning("Failed removing temp file: \(slideFile): \(error)")

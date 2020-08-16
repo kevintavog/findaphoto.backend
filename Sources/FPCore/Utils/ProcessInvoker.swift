@@ -28,7 +28,12 @@ public class ProcessInvoker {
 
     // Runs the command, waits for it to exit and returns the results
     static public func run(_ path: String, arguments: [String]) -> ProcessResult {
-        return start(path, arguments: arguments, nil).waitForExit()
+        let p = start(path, arguments: arguments, nil)
+        if let err = p.runError {
+            return ProcessResult("", "\(err)", -1, Process.TerminationReason.uncaughtSignal)
+        }
+
+        return p.waitForExit()
     }
 
     // Runs the command, returning without waiting for the command to exit
@@ -50,7 +55,6 @@ public class ProcessInvoker {
             if data.isEmpty {
                 return
             }
-
             if let outputCallback = self.outputDataAvailable {
                 outputCallback(data)
             } else {
@@ -90,6 +94,9 @@ public class ProcessInvoker {
         process.waitUntilExit()
         let output = String(data: outputData, encoding: String.Encoding.utf8) ?? ""
         let error = String(data: errorData, encoding: String.Encoding.utf8) ?? ""
+        try? (process.standardOutput as! Pipe).fileHandleForReading.close()
+        try? (process.standardError as! Pipe).fileHandleForReading.close()
+
         if let err = runError {
             return ProcessResult(output + "\n" + error, "\(err)", -1, Process.TerminationReason.uncaughtSignal)
         }

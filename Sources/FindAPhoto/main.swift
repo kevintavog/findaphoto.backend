@@ -1,4 +1,7 @@
 import FPCore
+import Logging
+import LoggingFormatAndPipe
+
 import Guaka
 import Vapor
 
@@ -29,6 +32,15 @@ let flags = [aliasOverrideFlag, elasticSearchFlag, indexOverrideFlag]
 let eventGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount * 2)
 let eventLoop = eventGroup.next()
 
+let timestampFormatter = DateFormatter()
+timestampFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
+let logger = Logger(label: "FpIndexer") { _ in 
+	return LoggingFormatAndPipe.Handler(
+		formatter: BasicFormatter([.timestamp, .level, .metadata, .message], timestampFormatter: timestampFormatter),
+		pipe: LoggerTextOutputStreamPipe.standardOutput
+	)
+}
+
 let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
     StandardPaths.initFor(appName: "FindAPhoto")
     ElasticSearchClient.ServerUrl = FpConfiguration.instance.elasticSearchUrl
@@ -38,11 +50,11 @@ let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
     }
     if let indexPrefix = flags.getString(name: "index") {
         ElasticSearchClient.setIndexPrefix(indexPrefix)
+        runIndexerPrefix = indexPrefix
     }
     if let aliasOverride = flags.getString(name: "alias") {
         Aliases.aliasOverride = aliasOverride
     }
-
 
     do {
         try ElasticSearchInit.run(eventLoop)
