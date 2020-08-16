@@ -4,6 +4,8 @@ import ElasticSwift
 import Vapor
 
 public class Aliases {
+    static public var aliasOverride = ""
+
     static var client: ElasticClient? = nil
     static let MaxAliasCount: Int = 100
     static var eventLoop: EventLoop? = nil
@@ -101,5 +103,11 @@ public class Aliases {
 
         client!.search(request, completionHandler: handler)
         allAliases = try promise.futureResult.wait()
+        if aliasOverride.count > 0 {
+            allAliases = allAliases.map {
+                print("NOTE: Overriding the alias path from \($0.path) to \(aliasOverride)")
+                return FpAlias(pathOverride: aliasOverride, alias: $0)
+            }
+        }
     }
 }

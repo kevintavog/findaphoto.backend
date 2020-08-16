@@ -12,6 +12,13 @@ public struct FpAlias: Codable {
         self.path = path
         self.alias = alias
     }
+
+    public init(pathOverride: String, alias: FpAlias) {
+        self.dateAdded = alias.dateAdded
+        self.dateLastIndexed = alias.dateLastIndexed
+        self.alias = alias.alias
+        self.path = pathOverride
+    }
 }
 
 extension FpAlias: Equatable {

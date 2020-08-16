@@ -26,6 +26,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio-ssl.git", .upToNextMajor(from: "2.6.1")),
         .package(url: "https://github.com/apple/swift-nio-transport-services.git", .upToNextMajor(from: "1.3.0")),
         .package(url: "https://github.com/apple/swift-log.git", .upToNextMajor(from: "1.2.0")),
+        .package(url: "https://github.com/adorkable/swift-log-format-and-pipe.git", from: "0.1.1"),
         .package(url: "https://github.com/swift-server/async-http-client.git", .upToNextMajor(from: "1.1.0")),
     ],
     targets: [
@@ -41,8 +42,9 @@ let package = Package(
         ),
         .target(
             name: "FPIndexer",
-            dependencies: ["Async", "Guaka", "FPCore", "SwiftyJSON", 
-                .product(name: "Crypto", package: "swift-crypto")],
+            dependencies: ["Async", "Guaka", "FPCore", "SwiftyJSON",
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "LoggingFormatAndPipe", package: "swift-log-format-and-pipe")],
             swiftSettings: [
                 // Enable better optimizations when building in Release configuration. Despite the use of
                 // the `.unsafeFlags` construct required by SwiftPM, this flag is recommended for Release

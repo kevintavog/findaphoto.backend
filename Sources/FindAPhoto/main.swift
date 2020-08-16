@@ -3,27 +3,53 @@ import Guaka
 import Vapor
 
 
+let aliasOverrideFlag = Flag(
+    shortName: "a",
+    longName: "alias",
+    type: String.self,
+    description: "The path to use for the alias.",
+    required: false)
+
 let elasticSearchFlag = Flag(
     shortName: "e",
     longName: "elastic",
     type: String.self,
-    description: "The URL for ElasticSearch.",
-    required: true)
+    description: "The URL for ElasticSearch (overrides configuration).",
+    required: false)
 
-let flags = [elasticSearchFlag]
+let indexOverrideFlag = Flag(
+    shortName: "i",
+    longName: "index",
+    type: String.self,
+    description: "The prefix for the indices (for development)",
+    required: false)
+
+
+let flags = [aliasOverrideFlag, elasticSearchFlag, indexOverrideFlag]
 let eventGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount * 2)
 let eventLoop = eventGroup.next()
 
 let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
-    ElasticSearchClient.ServerUrl = flags.getString(name: "elastic")!
+    StandardPaths.initFor(appName: "FindAPhoto")
+    ElasticSearchClient.ServerUrl = FpConfiguration.instance.elasticSearchUrl
+    if let elasticUrl = flags.getString(name: "elastic") {
+        print("Overriding elastic URL to: \(elasticUrl)")
+        ElasticSearchClient.ServerUrl = elasticUrl
+    }
+    if let indexPrefix = flags.getString(name: "index") {
+        ElasticSearchClient.setIndexPrefix(indexPrefix)
+    }
+    if let aliasOverride = flags.getString(name: "alias") {
+        Aliases.aliasOverride = aliasOverride
+    }
+
 
     do {
-        StandardPaths.initFor(appName: "FindAPhoto")
         try ElasticSearchInit.run(eventLoop)
         try Aliases.initialize(eventLoop)
         print("ElasticSearch \(ElasticSearchClient.version); \(ElasticSearchClient.ServerUrl)")
 
-        var env = try Environment.detect()
+        var env = Environment(name: "development", arguments: ["vapor"])
         try LoggingSystem.bootstrap(from: &env)
         let app = Application(env)
 

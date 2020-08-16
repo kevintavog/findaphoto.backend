@@ -5,6 +5,7 @@ public class StandardPaths {
 
     // var LogDirectory string
     static public private(set) var configDirectory = ""
+    static public private(set) var configFilename = "rangic.findaphotoService"
     static public private(set) var thumbnailDirectory = ""
     static public private(set) var exifToolPath = ""
     static public private(set) var vipsThumbnailPath = ""

@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 import NIOConcurrencyHelpers
 
 import FPCore
@@ -26,9 +27,10 @@ public class Statistics {
     private static func emit(_ message: String) {
         lock.withLock {
             let durationSeconds = Int(Date().timeIntervalSince(startTime))
-            print("\(message)\(durationSeconds) seconds, \(folders) folders, \(files) files. With "
+            logger.info(Logger.Message( stringLiteral: "\(message)\(durationSeconds) seconds, "
+                + "\(folders) folders, \(files) files. With "
                 + "\(exifInvocations) exiftool invocations, \(indexed) items indexed and "
-                + "\(thumbnails) thumbnails generated. \(IndexingFailures.count()) errors")
+                + "\(thumbnails) thumbnails generated. \(IndexingFailures.count()) errors"))
         }
     }
 

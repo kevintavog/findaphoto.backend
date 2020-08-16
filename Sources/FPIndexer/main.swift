@@ -1,9 +1,18 @@
 import Foundation
 import FPCore
+import Logging
 
 import Async
 import Guaka
+import LoggingFormatAndPipe
 import Vapor
+
+let aliasOverrideFlag = Flag(
+    shortName: "a",
+    longName: "alias",
+    type: String.self,
+    description: "The path to use for the alias.",
+    required: false)
 
 let concurrentFlag = Flag(
     longName: "concurrent",
@@ -16,7 +25,7 @@ let elasticSearchFlag = Flag(
     longName: "elastic",
     type: String.self,
     description: "The URL for ElasticSearch.",
-    required: true)
+    required: false)
 
 let indexOverrideFlag = Flag(
     shortName: "i",
@@ -30,19 +39,12 @@ let pathFlag = Flag(
     longName: "path",
     type: String.self,
     description: "The path to scan for photos & videos",
-    required: true)
+    required: false)
 
 let reindexFlag = Flag(
     longName: "reindex",
     value: false,
     description: "Do a full reindex, only generate thumbnails of new or changed items")
-
-let reverseNameFlag = Flag(
-    shortName: "r",
-    longName: "reverse",
-    type: String.self,
-    description: "The URL for ReverseNameLookup.",
-    required: true)
 
 let timingsFlag = Flag(
     longName: "timings",
@@ -51,15 +53,38 @@ let timingsFlag = Flag(
 
 
 
-let flags = [concurrentFlag, elasticSearchFlag, indexOverrideFlag, pathFlag, reindexFlag, reverseNameFlag, timingsFlag]
+let flags = [aliasOverrideFlag, concurrentFlag, elasticSearchFlag, indexOverrideFlag, pathFlag, reindexFlag, timingsFlag]
 let eventGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 let eventLoop = eventGroup.next()
 
+let timestampFormatter = DateFormatter()
+timestampFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
+let logger = Logger(label: "FpIndexer") { _ in 
+	return LoggingFormatAndPipe.Handler(
+		formatter: BasicFormatter([.timestamp, .level, .metadata, .message], timestampFormatter: timestampFormatter),
+		pipe: LoggerTextOutputStreamPipe.standardOutput
+	)
+}
+
 
 let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
-    ElasticSearchClient.ServerUrl = flags.getString(name: "elastic")!
-    LookupNames.reverseNameLookupUrl = flags.getString(name: "reverse")!
-    let path = flags.getString(name: "path")!
+    StandardPaths.initFor(appName: "FPIndexer")
+
+    ElasticSearchClient.ServerUrl = FpConfiguration.instance.elasticSearchUrl
+    if let elasticUrl = flags.getString(name: "elastic") {
+        print("Overriding elastic URL to: \(elasticUrl)")
+        ElasticSearchClient.ServerUrl = elasticUrl
+    }
+    if let aliasOverride = flags.getString(name: "alias") {
+        Aliases.aliasOverride = aliasOverride
+    }
+
+    LookupNames.reverseNameLookupUrl = FpConfiguration.instance.reverseNameUrl
+    var path = FpConfiguration.instance.indexPath
+    if let pathOverride = flags.getString(name: "path") {
+        print("Overriding path to: \(pathOverride)")
+        path = pathOverride
+    }
     let pathURL = URL(fileURLWithPath: path)
     let concurrent = flags.getInt(name: "concurrent") ?? 2
     let reindex = flags.getBool(name: "reindex") ?? false
@@ -78,18 +103,17 @@ let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
 
 
     do {
-        StandardPaths.initFor(appName: "FPIndexer")
-
         PrepareMedia.configure(instances: concurrent)
         try ElasticSearchInit.run(eventLoop)
         try Aliases.initialize(eventLoop)
         let alias = try Aliases.addOrCreateFrom(path: path)
 
-        print("Indexing \(path) (alias: \(alias)) with \(concurrent) tasks")
-        print("ElasticSearch \(ElasticSearchClient.version); \(ElasticSearchClient.ServerUrl); "
-            + "indexes: \(ElasticSearchClient.MediaIndexName), \(ElasticSearchClient.AliasIndexName)")
+        logger.info("Indexing \(path) (alias: \(alias)) with \(concurrent) tasks")
+        logger.info(Logger.Message( stringLiteral: "ElasticSearch \(ElasticSearchClient.version); "
+            + "\(ElasticSearchClient.ServerUrl); "
+            + "indexes: \(ElasticSearchClient.MediaIndexName), \(ElasticSearchClient.AliasIndexName)"))
         if reindex {
-            print(" -  NOTE: re-indexing all media")
+            logger.info(" -  NOTE: re-indexing all media")
         }
 
         try GenerateThumbnails.initialize()
@@ -141,9 +165,10 @@ let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
                 let lookupkDuration = lookupNamesTime.timeIntervalSince(prepareMediaTime)
 
                 if showTimings && allDuration > 0 {
-                    print(" >> item count: \(files.count); all: \(allDuration), sign: \(Int(signatureDuration)), "
+                    logger.info(Logger.Message(stringLiteral:" >> item count: \(files.count); "
+                        + "all: \(allDuration), sign: \(Int(signatureDuration)), "
                         + "check: \(Int(checkDuration)), prep: \(Int(prepareDuration)), "
-                        + "look: \(Int(lookupkDuration))")
+                        + "look: \(Int(lookupkDuration))"))
                 }
 
                 rwLock.write( { 
@@ -169,9 +194,9 @@ let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
         PrepareMedia.cleanup()
 
 
-        print("signatures: \(Int(totalSignatureDuration)), "
+        logger.info(Logger.Message( stringLiteral: "signatures: \(Int(totalSignatureDuration)), "
             + "check existing: \(Int(totalCheckDuration)), prepare: \(Int(totalPrepareDuration)), "
-            + "name lookup: \(Int(totalLookupkDuration))")
+            + "name lookup: \(Int(totalLookupkDuration))"))
         Statistics.stop()
         emitFailures()
     } catch {

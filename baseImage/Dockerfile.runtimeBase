@@ -1,0 +1,18 @@
+FROM swift:5.2-focal-slim
+
+# Environment Variables
+ARG LIBVIPS_VERSION_MAJOR_MINOR=8.9
+ARG LIBVIPS_VERSION_PATCH=2
+ARG MOZJPEG_VERSION="v3.3.1"
+
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y \
+    libjpeg-turbo8 libexif12 giflib-tools libtiff-tools libfftw3-3 ca-certificates wget && \
+    \
+    rm -f /etc/localtime && \
+    ln -s /usr/share/zoneinfo/America/Los_Angeles /etc/localtime && \
+    export DEBIAN_FRONTEND=noninteractive && \
+    apt-get install -y \
+    libimage-exiftool-perl ffmpeg tzdata libvips-dev && \
+    apt-get clean
