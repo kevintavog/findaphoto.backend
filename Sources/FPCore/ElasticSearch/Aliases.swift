@@ -9,7 +9,7 @@ public class Aliases {
     static var client: ElasticClient? = nil
     static let MaxAliasCount: Int = 100
     static var eventLoop: EventLoop? = nil
-    static var allAliases = [FpAlias]()
+    static public private(set) var allAliases = [FpAlias]()
 
     static public func initialize(_ eventLoop: EventLoop) throws {
         Aliases.eventLoop = eventLoop

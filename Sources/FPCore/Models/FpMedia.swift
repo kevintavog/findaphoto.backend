@@ -143,7 +143,7 @@ extension FpMedia {
         var components = Calendar.current.dateComponents([.year, .month, .day, .weekday, .hour], from: dateTime)
         components.timeZone = TimeZone(secondsFromGMT: 0)
 
-        self.date = String(format: "%04d%02d%0d", components.year!, components.month!, components.day!)
+        self.date = String(format: "%04d%02d%02d", components.year!, components.month!, components.day!)
         self.dayName = Calendar.current.weekdaySymbols[components.weekday! - 1]
         self.monthName = Calendar.current.monthSymbols[components.month! - 1]
 

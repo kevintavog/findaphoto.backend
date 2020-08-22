@@ -59,13 +59,13 @@ final class ByDayController: RouteCollection {
         return prevFuture.flatMap { prevResponse in
             if let first = prevResponse.hits.first {
                 let (month, day) = DayOfYear.toMonthDay(date: first.media.dateTime)
-                response.previousAvailableDay = APISearchResponse.AvailableDay(month: month, day: day)
+                response.previousAvailableByDay = APISearchResponse.AvailableDay(month: month, day: day)
             }
 
             return nextFuture.flatMap { nextResponse in
                 if let first = nextResponse.hits.first {
                     let (month, day) = DayOfYear.toMonthDay(date: first.media.dateTime)
-                    response.nextAvailableDay = APISearchResponse.AvailableDay(month: month, day: day)
+                    response.nextAvailableByDay = APISearchResponse.AvailableDay(month: month, day: day)
                 }
                 return eventLoop.makeSucceededFuture(response)
             }

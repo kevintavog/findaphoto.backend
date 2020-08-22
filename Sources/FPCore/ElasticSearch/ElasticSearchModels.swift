@@ -39,6 +39,11 @@ struct ElasticErrorResponse: Codable, CustomStringConvertible {
     }
 }
 
+public struct ElasticSearchIndexResponse: Codable {
+    public let index: String
+    public let health: String
+}
+
 
 public enum ElasticSearchResultType: String, Codable {
     case created = "created"
@@ -72,10 +77,6 @@ struct ElasticSearchSearchResponse<T: Codable>: Codable {
             let _source: T
         }
     }
-}
-
-public struct ElasticSearchIndexResponse: Codable {
-    public let result: ElasticSearchResultType
 }
 
 public struct ElasticSearchBulkResponse: Codable {

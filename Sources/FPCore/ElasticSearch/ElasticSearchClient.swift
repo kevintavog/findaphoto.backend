@@ -4,6 +4,7 @@ import ElasticSwift
 // import ElasticSwiftCore
 // import ElasticSwiftNetworkingNIO
 import Vapor
+import SwiftyJSON
 
 
 public enum RangeCompare {
@@ -14,7 +15,7 @@ public class ElasticSearchClient {
     static public var ServerUrl = ""
     static public var AliasIndexName = "fp-alias"
     static public var MediaIndexName = "fp-media"
-    static internal var versionNumber: String = ""
+    static public var versionNumber: String = ""
     static internal var defaultSearchFields = ["dayname", "keywords", "locationPlaceName", "monthname", "path", "tags"]
 
     static public func setIndexPrefix(_ indexPrefix: String) {
@@ -103,7 +104,7 @@ public class ElasticSearchClient {
     }
 
     public func search(_ from: Int, _ size: Int, _ queryString: String?) throws -> EventLoopFuture<FpSearchResponse> {
-        let query: Query = queryString == nil
+        let query: Query = queryString?.isEmpty ?? true == true
             ? try QueryBuilders.matchAllQuery().build()
             : try QueryBuilders.queryStringQuery()
                 .set(query: queryString!)
@@ -116,7 +117,8 @@ public class ElasticSearchClient {
             .set(trackTotalHits: true)
             .set(from: from)
             .set(size: size)
-            .add(sort: SortBuilders.fieldSort("dateTime").set(order: .desc).build())
+            .add(sort: SortBuilders.fieldSort("date.keyword").set(order: .desc).build())
+            .add(sort: SortBuilders.fieldSort("dateTime").set(order: .asc).build())
             .build()
 
         return executeSearch(request)
@@ -168,6 +170,80 @@ print("searching with \(asString(request))")
         return promise.futureResult
     }
 
+    public func mappings(_ index: String) throws -> EventLoopFuture<[String]> {
+        let promise = eventLoop.makePromise(of: [String].self)
+
+        let path = "\(index)/_mappings"
+        try client.execute(
+            request: HTTPRequestBuilder().set(method: .GET).set(path: path).build(), 
+            completionHandler: { result in
+
+            switch result {
+                case .failure(let error):
+                    promise.fail(error)
+                    break
+                case .success(let response):
+                    if let data = response.body {
+                        if response.status != .ok {
+                            let bodyText = String(data: data, encoding: .utf8) ?? ""
+                            promise.fail(RangicError.http(response.status, bodyText))
+                        }
+
+                        do {
+                            let json = try JSON(data: data)
+                            var fieldNames = [String]()
+                            for propJson in json[index]["mappings"]["properties"] {
+                                fieldNames.append(propJson.0)
+                            }
+                            promise.succeed(fieldNames)
+                        } catch {
+                            promise.fail(error)
+                        }
+                    } else {
+                        promise.fail(RangicError.unexpected("No data returned"))
+                    }
+                    break
+            }
+        })
+
+        return promise.futureResult
+    }
+
+    public func indices(_ indices: [String]) throws -> EventLoopFuture<[ElasticSearchIndexResponse]> {
+        let promise = eventLoop.makePromise(of: [ElasticSearchIndexResponse].self)
+
+        let path = "_cat/indices/\(indices.joined(separator: ","))?format=json"
+        try client.execute(
+            request: HTTPRequestBuilder().set(method: .GET).set(path: path).build(), 
+            completionHandler: { result in
+
+            switch result {
+                case .failure(let error):
+                    promise.fail(error)
+                    break
+                case .success(let response):
+                    if let data = response.body {
+                        if response.status != .ok {
+                            let bodyText = String(data: data, encoding: .utf8) ?? ""
+                            promise.fail(RangicError.http(response.status, bodyText))
+                        }
+
+                        do {
+                            let indices = try JSONDecoder().decode([ElasticSearchIndexResponse].self, from: data)
+                            promise.succeed(indices)
+                        } catch {
+                            promise.fail(error)
+                        }
+                    } else {
+                        promise.fail(RangicError.unexpected("No data returned"))
+                    }
+                    break
+            }
+        })
+
+        return promise.futureResult
+    }
+
     public func bulkIndex(items: [FpMedia]) throws -> EventLoopFuture<BulkResponse> {
         let builder = BulkRequestBuilder().set(index: ElasticSearchClient.MediaIndexName)
         for i in items {
@@ -188,14 +264,6 @@ print("searching with \(asString(request))")
         }
 
         client.bulk(request, completionHandler: handler)
-        return promise.futureResult
-    }
-
-    public func indexInfo() throws -> EventLoopFuture<IndexInfoResponse> {
-        let promise = eventLoop.makePromise(of: IndexInfoResponse.self)
-        var indexInfo = IndexInfoResponse()
-        indexInfo.versionNumber = ElasticSearchClient.version
-        promise.succeed(indexInfo)
         return promise.futureResult
     }
 }

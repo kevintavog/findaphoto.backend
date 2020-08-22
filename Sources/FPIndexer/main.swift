@@ -161,8 +161,8 @@ let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
                 let allDuration = Int(endTime.timeIntervalSince(startTime))
                 let signatureDuration = signatureTime.timeIntervalSince(startTime)
                 let checkDuration = checkMediaTime.timeIntervalSince(signatureTime)
-                let prepareDuration = prepareMediaTime.timeIntervalSince(checkMediaTime)
-                let lookupkDuration = lookupNamesTime.timeIntervalSince(prepareMediaTime)
+                let prepareDuration = prepareMediaTime > checkMediaTime ? prepareMediaTime.timeIntervalSince(checkMediaTime) : 0.0
+                let lookupkDuration = lookupNamesTime > prepareMediaTime ? lookupNamesTime.timeIntervalSince(prepareMediaTime) : 0.0
 
                 if showTimings && allDuration > 0 {
                     logger.info(Logger.Message(stringLiteral:" >> item count: \(files.count); "

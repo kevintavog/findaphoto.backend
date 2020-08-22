@@ -8,8 +8,8 @@ struct APISearchResponse: Content, Codable, Equatable {
     var resultCount: Int = 0
     var totalMatches: Int = 0
     var groups: [APIGroupResponse] = []
-    var nextAvailableDay: AvailableDay?
-    var previousAvailableDay: AvailableDay?
+    var nextAvailableByDay: AvailableDay?
+    var previousAvailableByDay: AvailableDay?
 
     struct AvailableDay: Content, Codable, Equatable {
         let day: Int
