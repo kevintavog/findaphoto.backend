@@ -26,6 +26,11 @@ final class IndexController: RouteCollection {
 
         let client = ElasticSearchClient(req.eventLoop)
         var futures = [EventLoopFuture<IndexInfoResponse>]()
+        let searchOptions = SearchOptions(
+            first: 0,
+            count: 1,
+            properties: [],
+            categories: FpCategoryOptions())
 
         let qp = try req.query.decode(InfoQueryParams.self)
         for prop in (qp.properties ?? "build").split(separator: ",") {
@@ -54,7 +59,7 @@ final class IndexController: RouteCollection {
                     break
                 case "imagecount":
                     try futures.append(client
-                        .search(0, 1, "mimeType.keyword:image*")
+                        .search("mimeType.keyword:image*", searchOptions)
                         .map { response in
                             info.imageCount = response.total
                             return info
@@ -72,7 +77,7 @@ final class IndexController: RouteCollection {
                     break
                 case "videocount":
                     try futures.append(client
-                        .search(0, 1, "mimeType.keyword:video*")
+                        .search("mimeType.keyword:video*", searchOptions)
                         .map { response in
                             info.videoCount = response.total
                             return info
@@ -80,7 +85,7 @@ final class IndexController: RouteCollection {
                     break
                 case "warningcount":
                     try futures.append(client
-                        .search(0, 1, "warnings:*")
+                        .search("warnings:*", searchOptions)
                         .map { response in
                             info.warningCount = response.total
                             return info

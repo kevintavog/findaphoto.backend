@@ -8,6 +8,7 @@ struct ByDayQueryParams: Codable {
     let first: Int?
     let count: Int?
     let properties: String?
+    let categories: String?
 }
 
 
@@ -22,7 +23,7 @@ final class ByDayController: RouteCollection {
 
     func byday(_ req: Request) throws -> EventLoopFuture<APISearchResponse> {
         let qp = try req.query.decode(ByDayQueryParams.self)
-        let options = try CommonSearchOptions(qp.first, qp.count, qp.properties)
+        let options = try CommonSearchOptions.parse(qp.first, qp.count, qp.properties, qp.categories)
 
         let dayOfYear = DayOfYear.from(month: qp.month, day: qp.day)
         let previousCompare = dayOfYear == 1 ? RangeCompare.greaterThan : RangeCompare.lessThan
@@ -34,13 +35,14 @@ final class ByDayController: RouteCollection {
             .rangeSearch(0, 1, "dayOfYear", nextCompare, "\(dayOfYear)", "dayOfYear", true)
 
         return try ElasticSearchClient(req.eventLoop)
-            .search(options.first, options.count, "dayOfYear:\(dayOfYear)")
+            .search("dayOfYear:\(dayOfYear)", options)
             .flatMap { fpResponse in
                 // let promise = eventLoop.makePromise(of: APISearchResponse.self)
                 var apiResponse = APISearchResponse()
                 apiResponse.totalMatches = fpResponse.total
                 apiResponse.resultCount = fpResponse.hits.count
                 do {
+                    apiResponse.categories = CagegoryMapping.toAPI(fpResponse.categories)
                     apiResponse.groups = try GroupMapping.asGroups(fpResponse.hits, .date, options.properties)
                     return self.populatePrevAndNext(apiResponse, previousFuture, nextFuture)
                 } catch {

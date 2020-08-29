@@ -8,6 +8,7 @@ struct NearbyQueryParams: Codable {
     let first: Int?
     let count: Int?
     let properties: String?
+    let categories: String?
 }
 
 
@@ -20,7 +21,7 @@ final class NearbyController: RouteCollection {
 
     func nearby(_ req: Request) throws -> EventLoopFuture<APISearchResponse> {
         let qp = try req.query.decode(NearbyQueryParams.self)
-        let options = try CommonSearchOptions(qp.first, qp.count, qp.properties)
+        let options = try CommonSearchOptions.parse(qp.first, qp.count, qp.properties, qp.categories)
 
         let radiusKm = qp.maxKilometers ?? 100.0
         if radiusKm < 1 || radiusKm > 20000 {
@@ -28,12 +29,13 @@ final class NearbyController: RouteCollection {
         }
 
         return try ElasticSearchClient(req.eventLoop)
-            .nearby(qp.lat, qp.lon, radiusKm, options.first, options.count)
+            .nearby(qp.lat, qp.lon, radiusKm, options)
             .flatMap { fpResponse in
                 var apiResponse = APISearchResponse()
                 apiResponse.totalMatches = fpResponse.total
                 apiResponse.resultCount = fpResponse.hits.count
                 do {
+                    apiResponse.categories = CagegoryMapping.toAPI(fpResponse.categories)
                     apiResponse.groups = try GroupMapping.asGroups(fpResponse.hits, .date, options.properties)
                     return req.eventLoop.makeSucceededFuture(apiResponse)
                 } catch {

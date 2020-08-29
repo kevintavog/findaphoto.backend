@@ -37,7 +37,11 @@ class LookupNames {
                     media[mediaIndex].locationCountryCode = placename.countryCode
                     media[mediaIndex].locationStateName = placename.state
                     media[mediaIndex].locationCityName = placename.city
-                    media[mediaIndex].locationSiteName = (placename.sites ?? []).joined(separator: ", ")
+                    if let sites = placename.sites {
+                        media[mediaIndex].locationSiteName = sites.joined(separator: ", ")
+                    } else {
+                        media[mediaIndex].locationSiteName = nil
+                    }
                     media[mediaIndex].locationHierarchicalName = 
                         [media[mediaIndex].locationSiteName, media[mediaIndex].locationCityName, 
                         media[mediaIndex].locationStateName, media[mediaIndex].locationCountryName]

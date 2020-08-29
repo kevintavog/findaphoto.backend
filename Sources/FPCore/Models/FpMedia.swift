@@ -12,6 +12,9 @@ public struct FpMedia: Codable {
 	public let dayName: String      // (Wed, Wednesday)
 	public let monthName: String    // (Apr, April)
 	public let dayOfYear: Int       // Index of the day in the year, to help with byday searches (1-366; Jan/1 = 1, Feb/29 =60, Mar/1 = 61)
+    public let dateYear: String     // yyyy
+    public let dateMonth: String    // MM
+    public let dateDay: String      // dd
 
     public var mimeType: String? = nil
     public var width: Int? = nil
@@ -72,58 +75,6 @@ public struct FpMedia: Codable {
             self.longitude = lon
         }
     }
-
-
-    enum CodingKeys: String, CodingKey {
-        case path
-        case signature
-        case filename
-        case lengthInBytes
-
-        case mimeType
-        case width
-        case height
-        case durationSeconds
-
-        case keywords
-
-        case aperture
-        case exposureProgram
-        case exposureTime
-        case exposureTimeString
-        case flash
-        case fNumber
-        case focalLengthMm
-        case iso
-        case whiteBalance
-        case lensInfo
-        case lensModel
-        case cameraMake
-        case cameraModel
-        case originalCameraMake
-        case originalCameraModel
-
-        case tags
-
-        case location
-        case locationCountryName
-        case locationCountryCode
-        case locationStateName
-        case locationCityName
-        case locationSiteName
-        case locationPlaceName
-        case locationHierarchicalName
-        case locationDisplayName
-        case cachedLocationDistanceMeters
-
-        case dateTime
-        case date
-        case dayName
-        case monthName
-        case dayOfYear
-
-        case warnings
-    }
 }
 
 extension FpMedia: Equatable {
@@ -146,6 +97,10 @@ extension FpMedia {
         self.date = String(format: "%04d%02d%02d", components.year!, components.month!, components.day!)
         self.dayName = Calendar.current.weekdaySymbols[components.weekday! - 1]
         self.monthName = Calendar.current.monthSymbols[components.month! - 1]
+
+        self.dateYear = String(components.year!)
+        self.dateMonth = String(components.month!)
+        self.dateDay = String(components.day!)
 
         // Offset: 1-based, always includes a leap day, regardless of year. March 1st is always 61
         self.dayOfYear = DayOfYear.from(date: dateTime)

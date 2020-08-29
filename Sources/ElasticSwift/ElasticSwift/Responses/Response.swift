@@ -59,6 +59,50 @@ public struct IndexResponse: Codable, Equatable {
     }
 }
 
+// MARK - Aggregation Response
+public struct AggregationResponse: Codable, Equatable {
+    public let docCountErrorUpperBound: Int
+    public let sumOtherDocCount: Int
+    public let buckets: [AggregationBucketResponse]
+
+    enum CodingKeys: String, CodingKey {
+        case docCountErrorUpperBound = "doc_count_error_upper_bound"
+        case sumOtherDocCount = "sum_other_doc_count"
+        case buckets
+    }
+}
+
+public struct AggregationBucketResponse: Codable, Equatable, Swift.CustomStringConvertible {
+    public let key: String
+    public let count: Int
+    public let aggregations: [String:AggregationResponse]?
+
+    public var description: String {
+        return "\(key) = \(count); \(String(describing: aggregations))"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case count = "doc_count"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicCodingKeys.self)
+        key = try container.decode(String.self, forKey: .key(named: CodingKeys.key.rawValue))
+        count = try container.decode(Int.self, forKey: .key(named: CodingKeys.count.rawValue))
+
+        let codingKeys = container.allKeys
+        .map { $0.stringValue }
+        .filter { $0 != CodingKeys.key.rawValue && $0 != CodingKeys.count.rawValue }
+         if codingKeys.count > 0 {
+            let response = try container.decode(AggregationResponse.self, forKey: .key(named: codingKeys.first!))
+            aggregations = [codingKeys.first!: response]
+        } else {
+            aggregations = nil
+        }
+    }
+}
+
 // MARK: - Search Response
 
 public struct SearchResponse<T: Codable>: Codable, Equatable where T: Equatable {
@@ -67,12 +111,14 @@ public struct SearchResponse<T: Codable>: Codable, Equatable where T: Equatable 
     public let shards: Shards
     public let hits: SearchHits<T>
     public let scrollId: String?
+    public let aggregations: [String:AggregationResponse]?
 
     enum CodingKeys: String, CodingKey {
         case took
         case timedOut = "timed_out"
         case shards = "_shards"
         case hits
+        case aggregations
         case scrollId = "_scroll_id"
     }
 }

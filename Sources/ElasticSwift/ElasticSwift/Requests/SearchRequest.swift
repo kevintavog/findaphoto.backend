@@ -177,6 +177,15 @@ public func set(trackTotalHits: Bool) -> Self {
         return self
     }
 
+@discardableResult
+public func add(name: String, aggregation: Aggregation) -> Self {
+    if _searchSource.aggregations == nil {
+        _searchSource.aggregations = [String:Aggregation]()
+    }
+    _searchSource.aggregations?[name] = aggregation
+    return self
+}
+
     @discardableResult
     public func add(sort: Sort) -> Self {
         if _searchSource.sorts != nil {
@@ -1598,6 +1607,7 @@ public struct SearchSource {
 public var trackTotalHits: Bool?
     public var query: Query?
     public var sorts: [Sort]?
+    public var aggregations: [String:Aggregation]?
     public var size: Int?
     public var from: Int?
     public var sourceFilter: SourceFilter?
@@ -1620,6 +1630,7 @@ extension SearchSource: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 trackTotalHits = try container.decodeBoolIfPresent(forKey: .trackTotalHits)
+aggregations = try container.decodeIfPresent([String:Aggregation].self, forKey: .aggregations)
         query = try container.decodeQueryIfPresent(forKey: .query)
         sorts = try container.decodeArrayIfPresent(forKey: .sorts)
         size = try container.decodeIntIfPresent(forKey: .size)
@@ -1655,6 +1666,7 @@ trackTotalHits = try container.decodeBoolIfPresent(forKey: .trackTotalHits)
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
 try container.encodeIfPresent(trackTotalHits, forKey: .trackTotalHits)
+try container.encodeIfPresent(aggregations, forKey: .aggregations)
         try container.encodeIfPresent(query, forKey: .query)
         try container.encodeIfPresent(sorts, forKey: .sorts)
         try container.encodeIfPresent(size, forKey: .size)
@@ -1693,6 +1705,7 @@ try container.encodeIfPresent(trackTotalHits, forKey: .trackTotalHits)
 
     enum CodingKeys: String, CodingKey {
 case trackTotalHits = "track_total_hits"
+case aggregations = "aggs"
         case query
         case sorts = "sort"
         case size

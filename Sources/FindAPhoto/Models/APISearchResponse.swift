@@ -8,6 +8,7 @@ struct APISearchResponse: Content, Codable, Equatable {
     var resultCount: Int = 0
     var totalMatches: Int = 0
     var groups: [APIGroupResponse] = []
+    var categories: [APICategoriesResponse]?
     var nextAvailableByDay: AvailableDay?
     var previousAvailableByDay: AvailableDay?
 
@@ -18,6 +19,28 @@ struct APISearchResponse: Content, Codable, Equatable {
         init(month: Int, day: Int) {
             self.month = month
             self.day = day
+        }
+    }
+}
+
+struct APICategoriesResponse: Content, Codable, Equatable {
+    let field: String
+    let details: [Detail]
+
+    public init(field: String, details: [Detail]) {
+        self.field = field
+        self.details = details
+    }
+
+    struct Detail: Content, Codable, Equatable {
+        let value: String
+        let count: Int
+        let details: [Detail]?
+
+        init(value: String, count: Int, details: [Detail]?) {
+            self.value = value
+            self.count = count
+            self.details = details
         }
     }
 }
