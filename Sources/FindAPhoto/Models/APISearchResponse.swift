@@ -154,22 +154,46 @@ struct APIItemResponse: Content, Codable, Equatable {
 }
 
 struct APICountryResponse: Content, Codable, Equatable {
-    var country: String = ""
-    var count: Int = 0
-    var states: [APIStateResponse] = []
-    struct APIStateResponse: Content, Codable, Equatable {
-        var state: String = ""
-        var count: Int = 0
-        var cities: [APICityResponse] = []
+    let country: String
+    let count: Int
+    let states: [StateResponse]
 
-        struct APICityResponse: Content, Codable, Equatable {
-            var city: String = ""
-            var count: Int = 0
-            var sites: [APISiteResponse] = []
+    init(_ country: String, _ count: Int, _ states: [StateResponse]) {
+        self.country = country
+        self.count = count
+        self.states = states
+    }
 
-            struct APISiteResponse: Content, Codable, Equatable {
-                var site: String = ""
-                var count: Int = 0
+    struct StateResponse: Content, Codable, Equatable {
+        var state: String
+        var count: Int
+        var cities: [CityResponse]
+
+        init(_ state: String, _ count: Int, _ cities: [CityResponse]) {
+            self.state = state
+            self.count = count
+            self.cities = cities
+        }
+
+        struct CityResponse: Content, Codable, Equatable {
+            let city: String
+            let count: Int
+            let sites: [SiteResponse]
+
+            init(_ city: String, _ count: Int, _ sites: [SiteResponse]) {
+                self.city = city
+                self.count = count
+                self.sites = sites
+            }
+
+            struct SiteResponse: Content, Codable, Equatable {
+                let site: String
+                let count: Int
+
+                init(_ site: String, _ count: Int) {
+                    self.site = site
+                    self.count = count
+                }
             }
         }
     }
