@@ -88,7 +88,13 @@ public struct AggregationBucketResponse: Codable, Equatable, Swift.CustomStringC
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKeys.self)
-        key = try container.decode(String.self, forKey: .key(named: CodingKeys.key.rawValue))
+        if let s = try? container.decode(String.self, forKey: .key(named: CodingKeys.key.rawValue)) {
+            key = s
+        } else if let i = try? container.decode(Int.self, forKey: .key(named: CodingKeys.key.rawValue)) {
+            key = String(i)
+        } else {
+            key = try String(container.decode(Double.self, forKey: .key(named: CodingKeys.key.rawValue)))
+        }
         count = try container.decode(Int.self, forKey: .key(named: CodingKeys.count.rawValue))
 
         let codingKeys = container.allKeys

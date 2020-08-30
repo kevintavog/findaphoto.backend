@@ -82,7 +82,7 @@ public class ElasticSearchClient {
                 .set(size: size)
                 .add(sort: SortBuilders.fieldSort(sortField).set(order: sortAscending ? .asc : .desc).build())
 
-        return try executeSearch(builder, FpCategoryOptions())
+        return try executeSearch(builder, FpCategoryOptions(), SearchOptions.FieldValues())
     }
 
     public func term(_ from: Int, _ size: Int, _ field: String, _ val: String) throws -> EventLoopFuture<FpSearchResponse> {
@@ -98,7 +98,7 @@ public class ElasticSearchClient {
             .set(from: from)
             .set(size: size)
 
-        return try executeSearch(builder, FpCategoryOptions())
+        return try executeSearch(builder, FpCategoryOptions(), SearchOptions.FieldValues())
     }
 
     public func search(_ queryString: String?, _ options: SearchOptions) 
@@ -119,7 +119,7 @@ public class ElasticSearchClient {
             .add(sort: SortBuilders.fieldSort("date.keyword").set(order: .desc).build())
             .add(sort: SortBuilders.fieldSort("dateTime").set(order: .asc).build())
 
-        return try executeSearch(builder, options.categories)
+        return try executeSearch(builder, options.categories, options.fieldValues)
     }
 
     public func nearby(_ latitude: Double, _ longitude: Double, 
@@ -145,11 +145,13 @@ public class ElasticSearchClient {
                 .set(mode: .min)
                 .build())
 
-        return try executeSearch(builder, options.categories)
+        return try executeSearch(builder, options.categories, options.fieldValues)
     }
 
-    private func executeSearch(_ builder: SearchRequestBuilder, _ categoryOptions: FpCategoryOptions) 
-            throws -> EventLoopFuture<FpSearchResponse> {
+    private func executeSearch(_ builder: SearchRequestBuilder, 
+                                _ categoryOptions: FpCategoryOptions,
+                                _ fieldValues: SearchOptions.FieldValues)
+                                throws -> EventLoopFuture<FpSearchResponse> {
         let promise = eventLoop.makePromise(of: FpSearchResponse.self)
         func handler(_ result: Result<SearchResponse<FpMedia>, Error>) {
             switch result {
@@ -160,12 +162,14 @@ public class ElasticSearchClient {
                     promise.succeed(FpSearchResponse(
                         response.hits.hits.map { FpSearchResponse.Hit($0.source!, $0.sort?[0].value ?? "") },
                         response.hits.total.value,
-                        processAggregations(response.aggregations)))
+                        processCategories(response.aggregations),
+                        processFieldValues(fieldValues, response.aggregations)))
                     break
             }
         }
 
-        addAggregations(builder, categoryOptions)
+        addCategories(builder, categoryOptions)
+        addFieldValues(builder, fieldValues)
         let request = try builder.build()
 print("searching with \(asString(request))")
         client.search(request, completionHandler: handler)
@@ -269,14 +273,16 @@ print("searching with \(asString(request))")
         return promise.futureResult
     }
 
-    private func processAggregations(_ aggregations: [String:AggregationResponse]?) -> [FpSearchResponse.CategoryResult] {
+    private func processCategories(_ aggregations: [String:AggregationResponse]?) -> [FpSearchResponse.CategoryResult] {
         var results = [FpSearchResponse.CategoryResult]()
 
         if let aggs = aggregations {
             for (key, item) in aggs {
-                let details = processBucketAggregations(item.buckets)
-                if details.count > 0 {
-                    results.append(FpSearchResponse.CategoryResult(key, details))
+                if ["keywords", "tags", "countryName", "dateYear"].contains(key) {
+                    let details = processBucketCategories(item.buckets)
+                    if details.count > 0 {
+                        results.append(FpSearchResponse.CategoryResult(key, details))
+                    }
                 }
             }
         }
@@ -284,7 +290,7 @@ print("searching with \(asString(request))")
         return results
     }
 
-    private func processBucketAggregations(_ buckets : [AggregationBucketResponse]) -> [FpSearchResponse.CategoryDetail] {
+    private func processBucketCategories(_ buckets : [AggregationBucketResponse]) -> [FpSearchResponse.CategoryDetail] {
         var details = [FpSearchResponse.CategoryDetail]()
         for b in buckets {
             if b.count == 0 {
@@ -294,7 +300,7 @@ print("searching with \(asString(request))")
             var children = [FpSearchResponse.CategoryDetail]()
             if let subAggs = b.aggregations {
                 for (_, subValue) in subAggs {
-                    children += processBucketAggregations(subValue.buckets)
+                    children += processBucketCategories(subValue.buckets)
                 }
             }
 
@@ -307,7 +313,7 @@ print("searching with \(asString(request))")
         return details
     }
 
-    private func addAggregations(_ builder: SearchRequestBuilder, _ categoryOptions: FpCategoryOptions) {
+    private func addCategories(_ builder: SearchRequestBuilder, _ categoryOptions: FpCategoryOptions) {
         if categoryOptions.keywordCount > 0 {
             builder.add(
                 name: "keywords",
@@ -351,6 +357,36 @@ print("searching with \(asString(request))")
                         .build())
                     .build())
                 .build())
+        }
+    }
+
+    private func processFieldValues(_ fieldValues: SearchOptions.FieldValues,
+                                    _ aggregations: [String:AggregationResponse]?) 
+                                    -> [FpSearchResponse.FieldAndValues] {
+        var results = [FpSearchResponse.FieldAndValues]()
+        if let aggs = aggregations {
+            for (key, item) in aggs {
+                if fieldValues.fields.contains(key) {
+                    var values = [FpSearchResponse.FieldAndValues.ValueAndCount]()
+                    for b in item.buckets {
+                        values.append(FpSearchResponse.FieldAndValues.ValueAndCount(b.key, b.count))
+                    }
+
+                    if values.count > 0 {
+                        results.append(FpSearchResponse.FieldAndValues(key, values))
+                    }
+                }
+            }
+        }
+        return results
+    }
+
+    private func addFieldValues(_ builder: SearchRequestBuilder, _ fieldValues: SearchOptions.FieldValues) {
+        for field in fieldValues.fields {
+            let name = toIndexFieldName(field)
+            builder.add(
+                name: field, 
+                aggregation: AggregationBuilders.term(name).set(size: fieldValues.maxCount).build())
         }
     }
 }

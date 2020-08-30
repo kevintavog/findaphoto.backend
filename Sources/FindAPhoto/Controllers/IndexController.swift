@@ -1,6 +1,15 @@
 import FPCore
 import Vapor
 
+struct FieldValuesParams: Content {
+    let fields: String?
+    let max: Int?
+
+    let q: String?
+    let month: Int?
+    let day: Int?
+}
+
 struct ReindexQueryParams: Codable {
     let force: Bool?
 }
@@ -17,6 +26,7 @@ final class IndexController: RouteCollection {
         let api = routes.grouped("api")
         let index = api.grouped("index")
         index.get("info", use: info)
+        index.get("fieldvalues", use: fieldValues)
         index.post("reindex", use: reindex)
     }
 
@@ -107,6 +117,33 @@ final class IndexController: RouteCollection {
         }
 
         return promise.futureResult
+    }
+
+    func fieldValues(_ req: Request) throws -> EventLoopFuture<FieldValuesResponse> {
+        let qp = try req.query.decode(FieldValuesParams.self)
+        let fields = (qp.fields ?? "").split(separator: ",")
+        if fields.count < 1 {
+            throw Abort(.badRequest, reason: "'fields' query parameter missing")
+        }
+
+        var options = SearchOptions(first: 0, count: 0, properties: [],categories: FpCategoryOptions())
+        options.fieldValues.maxCount = qp.max ?? 20
+        options.fieldValues.fields = fields.map { String($0) }
+        var query = qp.q ?? ""
+        if let month = qp.month, let day = qp.day {
+            let dayOfYear = DayOfYear.from(month: month, day: day)
+            query = "dayOfYear:\(dayOfYear)"
+        }
+
+        return try ElasticSearchClient(req.eventLoop)
+            .search(query, options)
+            .flatMap { fpResponse in
+                return req.eventLoop.makeSucceededFuture(FieldValuesResponse(
+                    FieldValueMapping.toAPI(fpResponse.fieldValues)
+                ))
+            }.map { fvResponse in
+                return fvResponse
+            }
     }
 
     func reindex(_ req: Request) throws -> ReindexResponse {

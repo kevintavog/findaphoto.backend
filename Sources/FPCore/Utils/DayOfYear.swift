@@ -2,7 +2,6 @@ import Foundation
 
 
 public struct DayOfYear {
-
     static private let janStart = 1
     static private let febStart = janStart + 31
     static private let marStart = febStart + 29

@@ -37,7 +37,6 @@ final class ByDayController: RouteCollection {
         return try ElasticSearchClient(req.eventLoop)
             .search("dayOfYear:\(dayOfYear)", options)
             .flatMap { fpResponse in
-                // let promise = eventLoop.makePromise(of: APISearchResponse.self)
                 var apiResponse = APISearchResponse()
                 apiResponse.totalMatches = fpResponse.total
                 apiResponse.resultCount = fpResponse.hits.count
