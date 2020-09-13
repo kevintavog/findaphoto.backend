@@ -12,7 +12,7 @@ final class MediaIdController: RouteCollection {
     func media(_ req: Request) throws -> EventLoopFuture<String> {
         let id = req.parameters.get("id")!
         return try ElasticSearchClient(req.eventLoop)
-            .term(0, 1, "_id", id)
+            .term("_id", id, SearchOptions(first: 0, count: 1))
             .flatMap { fpResponse in
                 if fpResponse.total == 0 {
                     return req.eventLoop.makeFailedFuture(Abort(.notFound, reason: "No matching media found"))

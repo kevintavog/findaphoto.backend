@@ -27,7 +27,7 @@ public class ElasticSearchInit {
         }
     }
 
-    static internal func createIndex(_ client: ElasticClient, _ indexName: String, _ body: String) throws {
+    static public func createIndex(_ client: ElasticClient, _ indexName: String, _ body: String) throws {
         print("Creating \(indexName)")
 
         let promise = eventLoop!.makePromise(of: Bool.self)
@@ -63,7 +63,7 @@ public class ElasticSearchInit {
         let _ = try promise.futureResult.wait()
     }
 
-    static internal func doesIndexExist(_ client: ElasticClient, _ indexName: String) throws -> Bool {
+    static public func doesIndexExist(_ client: ElasticClient, _ indexName: String) throws -> Bool {
         let promise = eventLoop!.makePromise(of: Bool.self)
         client.indices.exists(IndexExistsRequest(indexName), completionHandler: { result in
             switch result {

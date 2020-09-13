@@ -20,7 +20,7 @@ final class FilesController: RouteCollection {
         let id = req.parameters.get("id")!
         let pathId = PathUtils.escape(id)
         return try ElasticSearchClient(req.eventLoop)
-            .term(0, 1, "_id", pathId)
+            .term("_id", pathId, SearchOptions(first: 0, count: 1))
             .flatMapThrowing { fpResponse in
                 if fpResponse.total == 0 {
                     throw Abort(.notFound, reason: "Missing")
@@ -40,7 +40,7 @@ final class FilesController: RouteCollection {
         let id = req.parameters.get("id")!
         let pathId = PathUtils.escape(id)
         return try ElasticSearchClient(req.eventLoop)
-            .term(0, 1, "_id", pathId)
+            .term("_id", pathId, SearchOptions(first: 0, count: 1))
             .flatMapThrowing { fpResponse in
                 if fpResponse.total == 0 {
                     throw Abort(.notFound, reason: "Missing")

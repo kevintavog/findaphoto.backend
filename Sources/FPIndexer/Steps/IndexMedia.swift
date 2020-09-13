@@ -45,6 +45,8 @@ class IndexMedia {
                     }
                 }
             }
+
+            TagMedia.enqueue(items)
         } catch {
             IndexingFailures.append("Failed indexing \(error)")
         }

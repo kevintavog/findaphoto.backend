@@ -9,6 +9,8 @@ public class FpFile: CustomStringConvertible {
 
     public var signature: String = ""
     public var signatureMatches: Bool = false
+    public var azureTagsExist: Bool = false
+    public var clarifaiTagsExist: Bool = false
 
 
     public init(_ url: URL, _ path: String, _ length: Int, _ date: Date) {

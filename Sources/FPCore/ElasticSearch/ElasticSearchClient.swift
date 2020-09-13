@@ -29,7 +29,7 @@ public class ElasticSearchClient {
     }
 
     internal let eventLoop: EventLoop
-    internal let client: ElasticClient
+    public let client: ElasticClient
 
 
     public init(_ eventLoop: EventLoop) {
@@ -82,10 +82,10 @@ public class ElasticSearchClient {
                 .set(size: size)
                 .add(sort: SortBuilders.fieldSort(sortField).set(order: sortAscending ? .asc : .desc).build())
 
-        return try executeSearch(builder, FpCategoryOptions(), SearchOptions.FieldValues())
+        return try executeSearch(builder, SearchOptions(first: from, count: size))
     }
 
-    public func term(_ from: Int, _ size: Int, _ field: String, _ val: String) throws -> EventLoopFuture<FpSearchResponse> {
+    public func term(_ field: String, _ val: String, _ options: SearchOptions) throws -> EventLoopFuture<FpSearchResponse> {
         let query = try QueryBuilders.termQuery()
             .set(field: field)
             .set(value: val)
@@ -95,10 +95,10 @@ public class ElasticSearchClient {
             .set(indices: ElasticSearchClient.MediaIndexName)
             .set(query: query)
             .set(trackTotalHits: true)
-            .set(from: from)
-            .set(size: size)
+            .set(from: options.first)
+            .set(size: options.count)
 
-        return try executeSearch(builder, FpCategoryOptions(), SearchOptions.FieldValues())
+        return try executeSearch(builder, options)
     }
 
     public func search(_ queryString: String?, _ options: SearchOptions) 
@@ -119,7 +119,7 @@ public class ElasticSearchClient {
             .add(sort: SortBuilders.fieldSort("date.keyword").set(order: .desc).build())
             .add(sort: SortBuilders.fieldSort("dateTime").set(order: .asc).build())
 
-        return try executeSearch(builder, options.categories, options.fieldValues)
+        return try executeSearch(builder, options)
     }
 
     public func nearby(_ latitude: Double, _ longitude: Double, 
@@ -145,12 +145,10 @@ public class ElasticSearchClient {
                 .set(mode: .min)
                 .build())
 
-        return try executeSearch(builder, options.categories, options.fieldValues)
+        return try executeSearch(builder, options)
     }
 
-    private func executeSearch(_ builder: SearchRequestBuilder, 
-                                _ categoryOptions: FpCategoryOptions,
-                                _ fieldValues: SearchOptions.FieldValues)
+    private func executeSearch(_ builder: SearchRequestBuilder, _ options: SearchOptions)
                                 throws -> EventLoopFuture<FpSearchResponse> {
         let promise = eventLoop.makePromise(of: FpSearchResponse.self)
         func handler(_ result: Result<SearchResponse<FpMedia>, Error>) {
@@ -163,15 +161,19 @@ public class ElasticSearchClient {
                         response.hits.hits.map { FpSearchResponse.Hit($0.source!, $0.sort?[0].value ?? "") },
                         response.hits.total.value,
                         processCategories(response.aggregations),
-                        processFieldValues(fieldValues, response.aggregations)))
+                        processFieldValues(options.fieldValues, response.aggregations)))
                     break
             }
         }
 
-        addCategories(builder, categoryOptions)
-        addFieldValues(builder, fieldValues)
+        addCategories(builder, options.categories)
+        addFieldValues(builder, options.fieldValues)
         let request = try builder.build()
-print("searching with \(asString(request))")
+
+        if options.logSearch {
+            print("searching with \(asString(request))")
+        }
+
         client.search(request, completionHandler: handler)
         return promise.futureResult
     }
@@ -247,29 +249,6 @@ print("searching with \(asString(request))")
             }
         })
 
-        return promise.futureResult
-    }
-
-    public func bulkIndex(items: [FpMedia]) throws -> EventLoopFuture<BulkResponse> {
-        let builder = BulkRequestBuilder().set(index: ElasticSearchClient.MediaIndexName)
-        for i in items {
-            builder.add(request: IndexRequest<FpMedia>(
-                index: ElasticSearchClient.MediaIndexName, id: i.path, source: i))
-        }
-        let request = try builder.build()
-        let promise = eventLoop.makePromise(of: BulkResponse.self)
-        func handler(_ result: Result<BulkResponse, Error>) {
-            switch result {
-                case .failure(let error):
-                    promise.fail(error)
-                    break
-                case .success(let response):
-                    promise.succeed(response)
-                    break
-            }
-        }
-
-        client.bulk(request, completionHandler: handler)
         return promise.futureResult
     }
 

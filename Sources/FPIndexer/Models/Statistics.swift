@@ -12,6 +12,9 @@ public class Statistics {
     static var exifInvocations = 0
     static var indexed = 0
     static var thumbnails = 0
+    static var missingTags = 0
+    static var cachedTags = 0
+    static var providerTags = 0
     static var lastFolder = ""
     static var lock = Lock()
     static var lastEmitIndexedCount = 0
@@ -27,10 +30,11 @@ public class Statistics {
     private static func emit(_ message: String) {
         lock.withLock {
             let durationSeconds = Int(Date().timeIntervalSince(startTime))
-            logger.info(Logger.Message( stringLiteral: "\(message)\(durationSeconds) seconds, "
-                + "\(folders) folders, \(files) files. With "
+            logger.info(Logger.Message(stringLiteral: "\(message)\(durationSeconds) seconds, "
+                + "\(folders) folders, \(files) files. "
                 + "\(exifInvocations) exiftool invocations, \(indexed) items indexed and "
-                + "\(thumbnails) thumbnails generated. \(IndexingFailures.count()) errors"))
+                + "\(thumbnails) thumbnails generated. \(IndexingFailures.count()) errors. "
+                + "\(missingTags) missing tags; \(cachedTags) cached tags; \(providerTags) provider tags"))
         }
     }
 
@@ -81,6 +85,24 @@ public class Statistics {
     static func add(thumbnails: Int) {
         lock.withLock {
             Statistics.thumbnails += thumbnails
+        }
+    }
+
+    static func add(missingTags: Int) {
+        lock.withLock {
+            Statistics.missingTags += missingTags
+        }
+    }
+
+    static func add(cachedTags: Int) {
+        lock.withLock {
+            Statistics.cachedTags += cachedTags
+        }
+    }
+
+    static func add(providerTags: Int) {
+        lock.withLock {
+            Statistics.providerTags += providerTags
         }
     }
 }

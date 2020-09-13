@@ -4,6 +4,8 @@ public struct FpConfiguration: Codable {
     public let elasticSearchUrl: String
     public let reverseNameUrl: String
     public let indexPath: String
+    public let azureSubscriptionKey: String
+    public let clarifaiApiKey: String
 
     static public let instance = FpConfiguration.load()
 
@@ -28,12 +30,16 @@ public struct FpConfiguration: Codable {
         self.elasticSearchUrl = ""
         self.reverseNameUrl = ""
         self.indexPath = ""
+        self.azureSubscriptionKey = ""
+        self.clarifaiApiKey = ""
     }
 
     enum CodingKeys: String, CodingKey {
         case elasticSearchUrl = "ElasticSearchUrl"
         case reverseNameUrl = "LocationLookupUrl"
         case indexPath = "DefaultIndexPath"
+        case azureSubscriptionKey = "AzureSubscriptionKey"
+        case clarifaiApiKey = "ClarifaiApiKey"
     }
 }
 

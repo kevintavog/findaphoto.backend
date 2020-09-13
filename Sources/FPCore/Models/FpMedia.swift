@@ -42,6 +42,8 @@ public struct FpMedia: Codable {
 
 	// Auto-classified
 	public var tags: [String]? = nil
+	public var azureTags: [String]? = nil
+	public var clarifaiTags: [String]? = nil
 
     public var location: GeoLocation? = nil
 

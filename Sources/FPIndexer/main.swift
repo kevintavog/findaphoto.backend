@@ -106,6 +106,7 @@ let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
         PrepareMedia.configure(instances: concurrent)
         try ElasticSearchInit.run(eventLoop)
         try Aliases.initialize(eventLoop)
+        try TagMedia.initialize()
         let alias = try Aliases.addOrCreateFrom(path: path)
 
         logger.info("Indexing \(path) (alias: \(alias)) with \(concurrent) tasks")
@@ -157,6 +158,12 @@ let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
                     Statistics.completedFolder(relativePath)
                 }
 
+                // Tags require the item to be in the index; they have a better chance of being there
+                // at this point.
+                // Add tags to items that are in ElasticSearch & aren't going to be re-indexed, but
+                // are missing tags
+                TagMedia.enqueue(files.filter { $0.signatureMatches && !($0.azureTagsExist || $0.azureTagsExist) })
+
                 let endTime = Date()
                 let allDuration = Int(endTime.timeIntervalSince(startTime))
                 let signatureDuration = signatureTime.timeIntervalSince(startTime)
@@ -192,9 +199,10 @@ let command = Command(usage: "FindAPhoto", flags: flags) { flags, args in
 
         IndexMedia.finish()
         PrepareMedia.cleanup()
+        TagMedia.finish()
 
 
-        logger.info(Logger.Message( stringLiteral: "signatures: \(Int(totalSignatureDuration)), "
+        logger.info(Logger.Message( stringLiteral: "times: signatures: \(Int(totalSignatureDuration)), "
             + "check existing: \(Int(totalCheckDuration)), prepare: \(Int(totalPrepareDuration)), "
             + "name lookup: \(Int(totalLookupkDuration))"))
         Statistics.stop()

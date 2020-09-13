@@ -79,6 +79,18 @@ struct ElasticSearchSearchResponse<T: Codable>: Codable {
     }
 }
 
+public struct ElasticSearchSignaturesResponse: Codable {
+    public let signature: String
+    public let azureTags: [String]?
+    public let clarifaiTags: [String]?
+
+    init(_ signature: String, _ azureTags: [String]?, _ clarifaiTags: [String]?) {
+        self.signature = signature
+        self.azureTags = azureTags
+        self.clarifaiTags = clarifaiTags
+    }
+}
+
 public struct ElasticSearchBulkResponse: Codable {
     public let errors: Bool
     public let items: [BulkItemsResponse]
