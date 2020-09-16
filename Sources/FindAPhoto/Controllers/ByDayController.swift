@@ -9,6 +9,7 @@ struct ByDayQueryParams: Codable {
     let count: Int?
     let properties: String?
     let categories: String?
+    let drilldown: String?
 }
 
 
@@ -23,7 +24,7 @@ final class ByDayController: RouteCollection {
 
     func byday(_ req: Request) throws -> EventLoopFuture<APISearchResponse> {
         let qp = try req.query.decode(ByDayQueryParams.self)
-        let options = try CommonSearchOptions.parse(qp.first, qp.count, qp.properties, qp.categories)
+        let options = try CommonSearchOptions.parse(qp.first, qp.count, qp.properties, qp.categories, qp.drilldown)
 
         let dayOfYear = DayOfYear.from(month: qp.month, day: qp.day)
         let previousCompare = dayOfYear == 1 ? RangeCompare.greaterThan : RangeCompare.lessThan

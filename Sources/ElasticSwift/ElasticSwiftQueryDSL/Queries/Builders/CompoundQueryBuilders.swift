@@ -53,8 +53,14 @@ public class BoolQueryBuilder: QueryBuilder {
 
     public init() {}
 
+    // @discardableResult
+    // public func must<T: Query>(query: T) -> BoolQueryBuilder {
+    //     _mustClauses.append(query)
+    //     return self
+    // }
+
     @discardableResult
-    public func must<T: Query>(query: T) -> BoolQueryBuilder {
+    public func must(query: Query) -> BoolQueryBuilder {
         _mustClauses.append(query)
         return self
     }
@@ -71,8 +77,14 @@ public class BoolQueryBuilder: QueryBuilder {
         return self
     }
 
+    // @discardableResult
+    // public func should<T: Query>(query: T) -> BoolQueryBuilder {
+    //     _shouldClauses.append(query)
+    //     return self
+    // }
+
     @discardableResult
-    public func should<T: Query>(query: T) -> BoolQueryBuilder {
+    public func should(query: Query) -> BoolQueryBuilder {
         _shouldClauses.append(query)
         return self
     }

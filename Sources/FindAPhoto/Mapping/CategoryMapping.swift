@@ -17,6 +17,6 @@ class CagegoryMapping {
         let details: [APICategoriesResponse.Detail]? = domain.children?.count ?? 0 > 0
             ? domain.children!.map { toAPIDetail($0) }
             : nil
-        return APICategoriesResponse.Detail(value: domain.name, count: domain.count, details: details)
+        return APICategoriesResponse.Detail(value: domain.name, count: domain.count, details: details, field: domain.field)
     }
 }

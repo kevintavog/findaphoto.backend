@@ -74,15 +74,14 @@ public class ElasticSearchClient {
                 break
         }
 
-        let builder = try SearchRequestBuilder()
-                .set(indices: ElasticSearchClient.MediaIndexName)
-                .set(query: queryBuilder.build())
-                .set(trackTotalHits: true)
-                .set(from: from)
-                .set(size: size)
-                .add(sort: SortBuilders.fieldSort(sortField).set(order: sortAscending ? .asc : .desc).build())
+        let builder = SearchRequestBuilder()
+            .set(indices: ElasticSearchClient.MediaIndexName)
+            .set(trackTotalHits: true)
+            .set(from: from)
+            .set(size: size)
+            .add(sort: SortBuilders.fieldSort(sortField).set(order: sortAscending ? .asc : .desc).build())
 
-        return try executeSearch(builder, SearchOptions(first: from, count: size))
+        return try executeSearch(builder, queryBuilder.build(), SearchOptions(first: from, count: size))
     }
 
     public func term(_ field: String, _ val: String, _ options: SearchOptions) throws -> EventLoopFuture<FpSearchResponse> {
@@ -93,12 +92,11 @@ public class ElasticSearchClient {
 
         let builder = SearchRequestBuilder()
             .set(indices: ElasticSearchClient.MediaIndexName)
-            .set(query: query)
             .set(trackTotalHits: true)
             .set(from: options.first)
             .set(size: options.count)
 
-        return try executeSearch(builder, options)
+        return try executeSearch(builder, query, options)
     }
 
     public func search(_ queryString: String?, _ options: SearchOptions) 
@@ -112,14 +110,13 @@ public class ElasticSearchClient {
 
         let builder = SearchRequestBuilder()
             .set(indices: ElasticSearchClient.MediaIndexName)
-            .set(query: query)
             .set(trackTotalHits: true)
             .set(from: options.first)
             .set(size: options.count)
             .add(sort: SortBuilders.fieldSort("date.keyword").set(order: .desc).build())
             .add(sort: SortBuilders.fieldSort("dateTime").set(order: .asc).build())
 
-        return try executeSearch(builder, options)
+        return try executeSearch(builder, query, options)
     }
 
     public func nearby(_ latitude: Double, _ longitude: Double, 
@@ -135,7 +132,6 @@ public class ElasticSearchClient {
 
         let builder = SearchRequestBuilder()
             .set(indices: ElasticSearchClient.MediaIndexName)
-            .set(query: query)
             .set(trackTotalHits: true)
             .set(from: options.first)
             .set(size: options.count)
@@ -145,11 +141,12 @@ public class ElasticSearchClient {
                 .set(mode: .min)
                 .build())
 
-        return try executeSearch(builder, options)
+        return try executeSearch(builder, query, options)
     }
 
-    private func executeSearch(_ builder: SearchRequestBuilder, _ options: SearchOptions)
+    private func executeSearch(_ builder: SearchRequestBuilder, _ query: Query, _ options: SearchOptions)
                                 throws -> EventLoopFuture<FpSearchResponse> {
+        try drilldown(builder, query, options)
         let promise = eventLoop.makePromise(of: FpSearchResponse.self)
         func handler(_ result: Result<SearchResponse<FpMedia>, Error>) {
             switch result {
@@ -176,6 +173,100 @@ public class ElasticSearchClient {
 
         client.search(request, completionHandler: handler)
         return promise.futureResult
+    }
+
+    private func drilldown(_ builder: SearchRequestBuilder, _ query: Query, _ options: SearchOptions) throws {
+        if options.drilldown.count > 0 {
+            let queryBuilder = QueryBuilders.boolQuery().must(query: query)
+            var locationQueryList: [Query] = []
+            var dateQueryList: [Query] = []
+            for (key, values) in options.drilldown {
+                var field = key
+
+                let keyGroup = key.split(separator: "~")
+                let isHierarchical = keyGroup.count > 1
+                if isHierarchical {
+                    field = String(keyGroup[0])
+                }
+
+        		if isLocationField(field) {
+                    if isHierarchical {
+                        for vs in values {
+                            let groups = vs.split(separator: "~")
+                            let valueQueryBuilder = QueryBuilders.boolQuery()
+                            for (idx, _) in groups.enumerated() {
+                                try valueQueryBuilder.must(query: QueryBuilders.termQuery()
+                                    .set(field: getLocationFieldName(String(keyGroup[idx])))
+                                    .set(value: String(groups[idx]))
+                                    .build())
+                            }
+                            try locationQueryList.append(valueQueryBuilder.build())
+                        }
+                    } else {
+                        for v in values {
+                            try locationQueryList.append(
+                                QueryBuilders.termQuery()
+                                    .set(field: getLocationFieldName(field))
+                                    .set(value: v)
+                                    .build())
+                        }
+                    }
+                } else if isDateField(field) {
+                    if isHierarchical {
+                        for vs in values {
+                            let groups = vs.split(separator: "~")
+                            let valueQueryBuilder = QueryBuilders.boolQuery()
+                            for (idx, _) in groups.enumerated() {
+                                try valueQueryBuilder.must(query: QueryBuilders.termQuery()
+                                    .set(field: getDateFieldName(String(keyGroup[idx])))
+                                    .set(value: String(groups[idx]))
+                                    .build())
+                            }
+                            try dateQueryList.append(valueQueryBuilder.build())
+                        }
+                    } else {
+                        for v in values {
+                            try dateQueryList.append(
+                                QueryBuilders.termQuery()
+                                    .set(field: getDateFieldName(field))
+                                    .set(value: v)
+                                    .build())
+                        }
+
+                    }
+                } else {
+                    let fieldQueryBuilder = QueryBuilders.boolQuery()
+                    for fieldValue in values {
+                        try fieldQueryBuilder.should(query: QueryBuilders
+                            .termQuery()
+                            .set(field: toIndexFieldName(field))
+                            .set(value: fieldValue)
+                            .build())
+                    }
+                    try queryBuilder.must(query: fieldQueryBuilder.build())
+                }
+            }
+
+            if !locationQueryList.isEmpty {
+                let locationQueryBuilder = QueryBuilders.boolQuery()
+                for q in locationQueryList {
+                    locationQueryBuilder.should(query: q)
+                }
+                try queryBuilder.must(query: locationQueryBuilder.build())
+            }
+
+            if !dateQueryList.isEmpty {
+                let dateQueryBuilder = QueryBuilders.boolQuery()
+                for q in dateQueryList {
+                    dateQueryBuilder.should(query: q)
+                }
+                try queryBuilder.must(query: dateQueryBuilder.build())
+            }
+
+            try builder.set(query: queryBuilder.build())
+        } else {
+            builder.set(query: query)
+        }
     }
 
     public func mappings(_ index: String) throws -> EventLoopFuture<[String]> {
@@ -277,13 +368,17 @@ public class ElasticSearchClient {
             }
 
             var children = [FpSearchResponse.CategoryDetail]()
+            var subField = ""
             if let subAggs = b.aggregations {
-                for (_, subValue) in subAggs {
+                for (subKey, subValue) in subAggs {
+                    if subField.isEmpty {
+                        subField = subKey
+                    }
                     children += processBucketCategories(subValue.buckets)
                 }
             }
 
-            var bucketDetail = FpSearchResponse.CategoryDetail(b.key, b.count)
+            var bucketDetail = FpSearchResponse.CategoryDetail(b.key, b.count, subField)
             if children.count > 0 {
                 bucketDetail.children = children
             }
@@ -314,11 +409,11 @@ public class ElasticSearchClient {
         if categoryOptions.placenameCount > 0 {
             builder.add(name: "countryName", aggregation: AggregationBuilders
                 .term("locationCountryName.keyword")
-                .add(name: "state", aggregation: AggregationBuilders
+                .add(name: "stateName", aggregation: AggregationBuilders
                     .term("locationStateName.keyword")
-                    .add(name: "city", aggregation: AggregationBuilders
+                    .add(name: "cityName", aggregation: AggregationBuilders
                         .term("locationCityName.keyword")
-                        .add(name: "site", aggregation: AggregationBuilders
+                        .add(name: "siteName", aggregation: AggregationBuilders
                             .term("locationSiteName.keyword")
                             .build())
                         .build())
@@ -331,7 +426,7 @@ public class ElasticSearchClient {
                 .term("dateYear.keyword")
                 .add(name: "dateMonth", aggregation: AggregationBuilders
                     .term("dateMonth.keyword")
-                    .add(name: "dateDaty", aggregation: AggregationBuilders
+                    .add(name: "dateDay", aggregation: AggregationBuilders
                         .term("dateDay.keyword")
                         .build())
                     .build())
@@ -367,5 +462,33 @@ public class ElasticSearchClient {
                 name: field, 
                 aggregation: AggregationBuilders.term(name).set(size: fieldValues.maxCount).build())
         }
+    }
+
+    private func isLocationField(_ name: String) -> Bool {
+        return ["countryname", "statename", "cityname", "sitename"].contains(name.lowercased())
+    }
+
+    private func isDateField(_ name: String) -> Bool {
+        return ["dateyear", "datemonth", "dateday"].contains(name.lowercased())
+    }
+
+    private func getLocationFieldName(_ name: String) -> String {
+        switch name {
+            case "countryName": return "locationCountryName.keyword"
+            case "stateName": return "locationStateName.keyword"
+            case "cityName": return "locationCityName.keyword"
+            case "siteName": return "locationSiteName.keyword"
+            default: return ""
+        }
+    }
+
+    private func getDateFieldName(_ name: String) -> String {
+        switch name {
+            case "dateYear": return "dateYear.keyword"
+            case "dateMonth": return "dateMonth.keyword"
+            case "dateDay": return "dateDay.keyword"
+            default: return ""
+        }
+
     }
 }

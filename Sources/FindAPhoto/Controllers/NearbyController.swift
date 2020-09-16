@@ -9,6 +9,7 @@ struct NearbyQueryParams: Codable {
     let count: Int?
     let properties: String?
     let categories: String?
+    let drilldown: String?
 }
 
 
@@ -21,7 +22,7 @@ final class NearbyController: RouteCollection {
 
     func nearby(_ req: Request) throws -> EventLoopFuture<APISearchResponse> {
         let qp = try req.query.decode(NearbyQueryParams.self)
-        let options = try CommonSearchOptions.parse(qp.first, qp.count, qp.properties, qp.categories)
+        let options = try CommonSearchOptions.parse(qp.first, qp.count, qp.properties, qp.categories, qp.drilldown)
 
         let radiusKm = qp.maxKilometers ?? 100.0
         if radiusKm < 1 || radiusKm > 20000 {

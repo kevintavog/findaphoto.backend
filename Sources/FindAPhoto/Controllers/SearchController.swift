@@ -8,6 +8,7 @@ struct SearchQueryParams: Codable {
     let query: String?
     let q: String?      // backward compatibility
     let categories: String?
+    let drilldown: String?
 }
 
 
@@ -20,7 +21,7 @@ final class SearchController: RouteCollection {
 
     func search(_ req: Request) throws -> EventLoopFuture<APISearchResponse> {
         let qp = try req.query.decode(SearchQueryParams.self)
-        let options = try CommonSearchOptions.parse(qp.first, qp.count, qp.properties, qp.categories)
+        let options = try CommonSearchOptions.parse(qp.first, qp.count, qp.properties, qp.categories, qp.drilldown)
 
         return try ElasticSearchClient(req.eventLoop)
             .search(qp.query ?? qp.q, options)

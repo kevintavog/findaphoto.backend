@@ -35,12 +35,12 @@ public struct FpSearchResponse {
     }
 
     public struct CategoryDetail {
-        public let field: String?
+        public let field: String
         public let name: String
         public let count: Int
         public var children: [CategoryDetail]?
 
-        public init(_ name: String, _ count: Int, _ field: String? = nil) {
+        public init(_ name: String, _ count: Int, _ field: String) {
             self.name = name
             self.count = count
             self.field = field

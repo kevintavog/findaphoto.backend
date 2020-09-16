@@ -36,11 +36,13 @@ struct APICategoriesResponse: Content, Codable, Equatable {
         let value: String
         let count: Int
         let details: [Detail]?
+        let field: String
 
-        init(value: String, count: Int, details: [Detail]?) {
+        init(value: String, count: Int, details: [Detail]?, field: String) {
             self.value = value
             self.count = count
             self.details = details
+            self.field = field
         }
     }
 }
